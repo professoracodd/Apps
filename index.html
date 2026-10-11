@@ -448,14 +448,13 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none}
 <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Export and data" aria-hidden="true">
   <div class="grab"></div>
   <h3>Export &amp; Data</h3>
-  <div class="caps s-cap">Recipe PDF</div>
+  <div class="caps s-cap">Share recipe</div>
   <div class="s-group">
-    <button class="s-item" data-a="pdfOne"><span class="ic tn-pink"><span class="ms" aria-hidden="true">picture_as_pdf</span></span><span class="txt">This recipe<small>The recipe you have selected</small></span></button>
-    <button class="s-item" data-a="pdfAll"><span class="ic tn-lav"><span class="ms" aria-hidden="true">library_books</span></span><span class="txt">All recipes<small>One PDF, a page per recipe</small></span></button>
-    <label class="s-item"><span class="ic tn-mint"><span class="ms" aria-hidden="true">payments</span></span><span class="txt">Include costs &amp; pricing<small>Turn off for a clean recipe card</small></span><span class="switch"><input type="checkbox" id="incCosts" checked><span></span></span></label>
+    <button class="s-item" data-a="imgOne"><span class="ic tn-sky"><span class="ms" aria-hidden="true">image</span></span><span class="txt">Save recipe as image<small>Save to Photos or send in a text</small></span></button>
+    <button class="s-item" data-a="pdfOne"><span class="ic tn-pink"><span class="ms" aria-hidden="true">picture_as_pdf</span></span><span class="txt">Recipe PDF<small>The recipe you have selected</small></span></button>
+    <button class="s-item" data-a="pdfAll"><span class="ic tn-lav"><span class="ms" aria-hidden="true">library_books</span></span><span class="txt">All recipes PDF<small>One PDF, a page per recipe</small></span></button>
+    <label class="s-item"><span class="ic tn-mint"><span class="ms" aria-hidden="true">payments</span></span><span class="txt">Include costs &amp; pricing<small>Turn off for a clean recipe card (image and PDF)</small></span><span class="switch"><input type="checkbox" id="incCosts" checked><span></span></span></label>
   </div>
-  <div class="caps s-cap">This file</div>
-  <div class="s-group" id="fileGroup"></div>
   <div class="caps s-cap">Settings</div>
   <div class="s-group">
     <label class="s-item"><span class="ic tn-sky"><span class="ms" aria-hidden="true">volume_up</span></span><span class="txt">Sound effects<small>Clicks, slider ticks and chimes</small></span><span class="switch"><input type="checkbox" id="soundOn" checked><span></span></span></label>
@@ -463,7 +462,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none}
   <div class="caps s-cap">Spreadsheet</div>
   <div class="s-group">
     <button class="s-item" data-a="xlsx"><span class="ic tn-mint"><span class="ms" aria-hidden="true">table_view</span></span><span class="txt">Export to Excel<small>A tab per recipe with live formulas</small></span></button>
-    <button class="s-item" data-a="import"><span class="ic tn-sky"><span class="ms" aria-hidden="true">upload_file</span></span><span class="txt">Import Excel or backup<small>A file exported from this app</small></span></button>
+    <button class="s-item" data-a="import"><span class="ic tn-sky"><span class="ms" aria-hidden="true">upload_file</span></span><span class="txt">Import Excel<small>A file exported from this app</small></span></button>
     <button class="s-item danger" data-a="reset"><span class="ic"><span class="ms" aria-hidden="true">restart_alt</span></span><span class="txt">Reset to sample recipes</span></button>
   </div>
   <button class="cancel" data-a="closeSheet">Done</button>
@@ -480,7 +479,6 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none}
   <div class="tour-finger" id="tourFinger" aria-hidden="true"></div>
 </div>
 <div id="printArea"></div>
-<div class="resume" id="resume" hidden><span class="ms" aria-hidden="true">save</span><span class="txt">Keep saving into <b></b>?</span><button data-a="fileResume">Resume</button><button class="x" data-a="resumeHide" aria-label="Not now"><span class="ms" aria-hidden="true">close</span></button></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <input type="file" id="fileIn" accept=".xlsx,.json" hidden>
 
@@ -596,42 +594,7 @@ function load(){
 }
 function valid(d){return d&&Array.isArray(d.recipes)&&d.packaging&&Array.isArray(d.packaging.items)&&d.packaging.label;}
 let DEMO=false;
-function save(){if(DEMO)return;S.savedAt=Date.now();try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}queueFileSave();}
-/* ---------- save into this file ---------- */
-const FS_OK='showOpenFilePicker' in window;
-let FH=null,fhState='none',fileTimer=null,lastFileSave=null;
-function idb(mode,fn){return new Promise((res,rej)=>{let r;try{r=indexedDB.open('batch-app',1);}catch(e){return rej(e);}r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onerror=()=>rej(r.error);r.onsuccess=()=>{try{const tx=r.result.transaction('kv',mode);const q=fn(tx.objectStore('kv'));tx.oncomplete=()=>res(q&&q.result);tx.onerror=()=>rej(tx.error);}catch(e){rej(e);}};});}
-const idbGet=k=>idb('readonly',st=>st.get(k)).catch(()=>null),idbSet=(k,v)=>idb('readwrite',st=>st.put(v,k)).catch(()=>{}),idbDel=k=>idb('readwrite',st=>st.delete(k)).catch(()=>{});
-function buildHTML(){const c=SRC.cloneNode(true);const d=Object.assign({},S);delete d.tourV;delete d.tourDone;c.querySelector('#appdata').textContent=JSON.stringify(d).replace(/</g,'\\u003c');return '<!doctype html>\n'+c.outerHTML;}
-async function writeFile(){
-  if(!FH||fhState!=='granted')return;
-  try{const w=await FH.createWritable();await w.write(buildHTML());await w.close();lastFileSave=new Date();renderFileGroup();}
-  catch(e){fhState='prompt';showResume(true);renderFileGroup();}
-}
-function queueFileSave(){if(!FH||fhState!=='granted')return;clearTimeout(fileTimer);fileTimer=setTimeout(writeFile,700);}
-async function linkFile(){
-  let h;try{[h]=await window.showOpenFilePicker({types:[{description:'Batch app',accept:{'text/html':['.html','.htm']}}]});}catch(e){return;}
-  try{const t=await (await h.getFile()).text();if(!t.includes('id="appdata"')){toast("That file isn't this app. Pick the Batch .html file.",4000);return;}}catch(e){}
-  let p='denied';try{p=await h.requestPermission({mode:'readwrite'});}catch(e){}
-  if(p!=='granted'){toast('Saving into the file needs your OK.');return;}
-  FH=h;fhState='granted';await idbSet('fh',h);await writeFile();showResume(false);SFX.chime();toast(`Changes now save into ${h.name}`);renderFileGroup();
-}
-async function resumeFile(){if(!FH)return;let p='denied';try{p=await FH.requestPermission({mode:'readwrite'});}catch(e){}
-  if(p==='granted'){fhState='granted';showResume(false);await writeFile();SFX.chime();toast(`Saving into ${FH.name} again`);}else toast('Saving is paused.');renderFileGroup();}
-async function unlinkFile(){FH=null;fhState='none';await idbDel('fh');showResume(false);renderFileGroup();toast('Stopped saving into the file');}
-function downloadCopy(){download(new Blob([buildHTML()],{type:'text/html'}),'cookie-calculator.html');SFX.chime();toast('Copy downloaded with your data',3000);}
-function showResume(on){const el=document.getElementById('resume');if(el){el.hidden=!on;if(on&&FH)el.querySelector('b').textContent=FH.name;}}
-function renderFileGroup(){
-  const g=document.getElementById('fileGroup');if(!g)return;
-  const item=(a,ic,tone,t,sub,cls='')=>`<button class="s-item ${cls}" data-a="${a}"><span class="ic ${tone}"><span class="ms" aria-hidden="true">${ic}</span></span><span class="txt">${t}<small>${sub}</small></span></button>`;
-  let h='';
-  if(!FS_OK)h+=item('fileCopy','download','tn-mint','Download app with my data',"This browser can't save into files. Download this copy and replace your old file.");
-  else if(!FH)h+=item('fileLink','save_as','tn-mint','Save changes into this file','Pick this HTML file once. Every change saves into it.');
-  else if(fhState==='granted')h+=`<div class="s-item"><span class="ic tn-mint"><span class="ms" aria-hidden="true">check_circle</span></span><span class="txt">Saving into ${esc(FH.name)}<small>${lastFileSave?'Last saved '+lastFileSave.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}):'Every change saves into the file'}</small></span></div>`+item('fileUnlink','link_off','tn-pink','Stop saving into the file','Changes still save in this browser');
-  else h+=item('fileResume','restore','tn-butter',`Resume saving into ${esc(FH.name)}`,'Your browser asks again after the file is reopened');
-  if(FS_OK)h+=item('fileCopy','download','tn-sky','Download a copy with my data','Share your recipes, or use on another computer');
-  g.innerHTML=h;
-}
+function save(){if(DEMO)return;S.savedAt=Date.now();try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
 S=load();
 
 if(S.active>=S.recipes.length) S.active=0;
@@ -962,7 +925,7 @@ const TOUR=[
     demo:async tok=>{await tapClick('[data-a="exp:p:0"]',tok);await sleep(500,tok);await typeInto('[data-b="p:0:price"]','35',tok);}},
   {tab:'orders',sel:'[data-tour=orderhero]',t:'Plan an order',d:'Set how many dozens someone ordered to see batches, bake time, and profit, plus a shopping list you can check off.',dur:9000,
     demo:async tok=>{await tapClick('[data-a="dz:1"]',tok);await sleep(400,tok);await tap(tok);q('[data-a="dz:1"]').click();await sleep(400,tok);await tap(tok);q('[data-a="dz:1"]').click();await sleep(700,tok);const v=+q('[data-s=dz]').value;await drag('[data-s=dz]',v+6,tok);}},
-  {tab:'profit',sel:'[data-a=sheet]',t:'Export & save',d:'Make PDF recipe cards, export to Excel, change settings, or back up your data.',dur:7000,
+  {tab:'profit',sel:'[data-a=sheet]',t:'Export & save',d:'Save a recipe as a picture for your photos, make PDFs, export to Excel, or change settings.',dur:7000,
     demo:async tok=>{await fingerTo('[data-a=sheet]',tok);await tap(tok);await sleep(700,tok);await tap(tok);}},
   {tab:'profit',sel:'[data-tour=help]',t:'Replay anytime',d:'Tap here to watch this tour again. Happy baking!',dur:0,
     demo:async tok=>{await fingerTo('[data-tour=help]',tok);await tap(tok);}}
@@ -1013,7 +976,7 @@ document.addEventListener('click',e=>{
   const r=R();
   ({sel:SFX.tap,tab:SFX.nav,size:SFX.tap,exp:()=>(OPEN===rest?SFX.close:SFX.open)(),chk:()=>(CHECK.has(rest)?SFX.uncheck:SFX.check)(),chkReset:SFX.down,
     step:()=>(+x>0?SFX.up:SFX.down)(),dz:()=>(+x>0?SFX.up:SFX.down)(),addRecipe:SFX.add,dupRecipe:SFX.add,addItem:SFX.add,addSec:SFX.add,addPk:SFX.add,delItem:SFX.del,delPk:SFX.del,
-    sheet:SFX.open,closeSheet:SFX.close,pdfOne:SFX.chime,pdfAll:SFX.chime,xlsx:SFX.chime,backup:SFX.chime,import:SFX.tap,
+    sheet:SFX.open,closeSheet:SFX.close,imgOne:SFX.chime,pdfOne:SFX.chime,pdfAll:SFX.chime,xlsx:SFX.chime,backup:SFX.chime,import:SFX.tap,
     tour:SFX.nav,tourNext:SFX.nav,tourPrev:SFX.nav,tourEnd:SFX.close,tourAuto:()=>SFX.toggle(!AUTO)}[a]||(()=>{}))();
   switch(a){
     case 'sel':S.active=+x;OPEN=null;break;
@@ -1038,12 +1001,8 @@ document.addEventListener('click',e=>{
     case 'tourNext':tourGo(1);return;
     case 'tourPrev':tourGo(-1);return;
     case 'tourAuto':AUTO=!AUTO;setPlayIcon();if(AUTO)startTimer(TOKEN);else{clearTimeout(advTimer);const bar=$('#tourBar');bar.style.width=getComputedStyle(bar).width;bar.style.transition='none';}return;
-    case 'fileLink':linkFile();return;
-    case 'fileResume':resumeFile();return;
-    case 'fileUnlink':unlinkFile();return;
-    case 'fileCopy':downloadCopy();return;
-    case 'resumeHide':showResume(false);return;
-    case 'sheet':renderFileGroup();openSheet(true);return;
+    case 'sheet':openSheet(true);return;
+    case 'imgOne':openSheet(false);exportImage(R());return;
     case 'closeSheet':openSheet(false);return;
     case 'pdfOne':openSheet(false);exportPDF([r]);return;
     case 'pdfAll':openSheet(false);exportPDF(S.recipes);return;
@@ -1062,6 +1021,60 @@ function download(blob,name){const u=URL.createObjectURL(blob);const a=document.
 const slug=s=>(String(s||'recipe').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'recipe');
 const pdfText=s=>String(s??'').replace(/[–—]/g,'-').replace(/[‘’]/g,"'").replace(/[“”]/g,'"').replace(/≈/g,'~').replace(/[^\x00-\xFF]/g,'');
 
+/* ---------- recipe image ---------- */
+function drawCard(r,inc){
+  const W=1080,P=72,c=calcR(r),cv=document.createElement('canvas'),F="Inter,-apple-system,'Segoe UI',Roboto,sans-serif";
+  const PAS=['#c4b5fd','#f9a8d4','#fdba74','#86efac','#93c5fd'];
+  const draw=(ctx,go)=>{
+    let y=0;const T=(txt,x,yy,font,color,align)=>{if(!go)return;ctx.font=font;ctx.fillStyle=color;ctx.textAlign=align||'left';ctx.fillText(txt,x,yy);};
+    const wrap=(txt,font,maxW)=>{ctx.font=font;const out=[];String(txt).split('\n').forEach(par=>{let line='';par.split(/\s+/).forEach(w=>{const t=line?line+' '+w:w;if(ctx.measureText(t).width>maxW&&line){out.push(line);line=w;}else line=t;});out.push(line);});return out;};
+    const fit=(txt,font,maxW)=>{ctx.font=font;let t=String(txt);if(ctx.measureText(t).width<=maxW)return t;while(t.length>1&&ctx.measureText(t+'…').width>maxW)t=t.slice(0,-1);return t+'…';};
+    const rr=(x,yy,w,h,rad,stroke,fill)=>{if(!go)return;ctx.beginPath();ctx.roundRect(x,yy,w,h,rad);if(fill){ctx.fillStyle=fill;ctx.fill();}if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=2;ctx.stroke();}};
+    if(go){ctx.fillStyle='#000';ctx.fillRect(0,0,W,cv.height);const g=ctx.createLinearGradient(0,0,W,0);PAS.forEach((p,i)=>g.addColorStop(i/(PAS.length-1),p));ctx.fillStyle=g;ctx.fillRect(0,0,W,8);}
+    y=P+28;T('BATCH',P,y,`700 26px ${F}`,'#c4b5fd');T(new Date().toLocaleDateString(),W-P,y,`500 26px ${F}`,'#71717a','right');
+    y+=36;const tl=wrap(r.name||'Untitled recipe',`800 76px ${F}`,W-2*P);tl.forEach(l=>{y+=84;T(l,P,y,`800 76px ${F}`,'#ffffff');});
+    y+=52;T(`Makes ${num(r.yield)} cookies · ${num(r.minutes)} min per batch`,P,y,`500 32px ${F}`,'#a1a1aa');
+    if(inc){
+      const dz=c.orders[2];const st=[['Cost per cookie',cents(c.perCookie+c.pk.dozen/12),PAS[4]],['Price per dozen',money(dz.used),PAS[0]],['Profit per dozen',money(dz.profit),PAS[3]],['Pay per hour',money(c.hourly),PAS[2]]];
+      y+=40;const bw=(W-2*P-24)/2,bh=128;
+      st.forEach((s2,i)=>{const x=P+(i%2)*(bw+24),yy=y+Math.floor(i/2)*(bh+24);rr(x,yy,bw,bh,24,s2[2]+'99',s2[2]+'12');T(s2[0].toUpperCase(),x+28,yy+46,`700 22px ${F}`,s2[2]);T(s2[1],x+28,yy+100,`800 46px ${F}`,'#ffffff');});
+      y+=2*bh+24;
+    }
+    let ri=0;
+    r.sections.forEach(sec=>{
+      const rows=sec.items.map(it=>({it,x:c.rows[ri++]})).filter(o=>o.it.name||!blank(o.it.amount));if(!rows.length)return;
+      y+=72;T(String(sec.name||'').toUpperCase(),P,y,`700 26px ${F}`,'#c4b5fd');y+=18;if(go){ctx.fillStyle='rgba(196,181,253,.35)';ctx.fillRect(P,y,W-2*P,2);}
+      rows.forEach(({it,x})=>{
+        y+=62;const ml=measureLine(it);const mtxt=ml?(ml.eq?`${ml.m}  ·  ${ml.eq}`:ml.m):(blank(it.amount)?'':`${nfmt(it.amount)} ${unitLabel(num(it.amount),x.base,it.name)}`);
+        const right=inc?cents(x.cc):'';const rw=inc?150:0;
+        T(fit(it.name||'Ingredient',`600 36px ${F}`,W-2*P-rw-20),P,y,`600 36px ${F}`,'#ffffff');
+        if(inc)T(right,W-P,y,`700 34px ${F}`,'#fdba74','right');
+        if(mtxt){y+=42;T(fit(mtxt,`500 29px ${F}`,W-2*P-rw-20),P,y,`500 29px ${F}`,'#c4b5fd');if(inc)T('per cookie',W-P,y,`500 22px ${F}`,'#71717a','right');}
+        y+=22;if(go){ctx.fillStyle='rgba(255,255,255,.07)';ctx.fillRect(P,y,W-2*P,2);}
+      });
+    });
+    if(inc){y+=64;T('Ingredients per batch',P,y,`600 32px ${F}`,'#a1a1aa');T(money(c.batch),W-P,y,`800 38px ${F}`,'#ffffff','right');}
+    if((r.notes||'').trim()){
+      y+=86;T('NOTES',P,y,`700 26px ${F}`,'#f9a8d4');y+=10;
+      wrap(r.notes.trim(),`500 31px ${F}`,W-2*P).forEach(l=>{y+=46;T(l,P,y,`500 31px ${F}`,'#e4e4e7');});
+    }
+    y+=90;T('Made with Batch',W/2,y,`600 24px ${F}`,'#52525b','center');
+    return y+P-20;
+  };
+  const tmp=document.createElement('canvas').getContext('2d');const H=Math.ceil(draw(tmp,false));
+  cv.width=W;cv.height=H;const ctx=cv.getContext('2d');draw(ctx,true);return cv;
+}
+const calcR=r=>calc(r);
+async function exportImage(r){
+  try{if(document.fonts&&document.fonts.ready)await document.fonts.ready;}catch(e){}
+  const cv=drawCard(r,S.incCosts!==false);
+  const blob=await new Promise(res=>cv.toBlob(res,'image/png'));if(!blob){toast("Couldn't make the image.");return;}
+  const file=new File([blob],slug(r.name)+'.png',{type:'image/png'});
+  if(navigator.canShare&&navigator.canShare({files:[file]})){
+    try{await navigator.share({files:[file],title:r.name||'Recipe'});return;}catch(e){if(e&&e.name==='AbortError')return;}
+  }
+  download(blob,file.name);toast('Image downloaded. Tap and hold it to save to Photos.',4000);
+}
 /* ---------- PDF ---------- */
 function exportPDF(list){
   const inc=S.incCosts!==false;
@@ -1237,8 +1250,6 @@ let storeOk=true;try{localStorage.setItem('__batch_t','1');storeOk=localStorage.
 const tourSeen=()=>{try{return localStorage.getItem('batchTourSeen2')==='1';}catch(e){return false;}};
 if(S.tourV!==2&&!tourSeen())setTimeout(()=>{if(TI<0&&S.tourV!==2&&!tourSeen())tourStart();},800);
 if(/^https?:$/.test(location.protocol)){if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist();}catch(e){}}
-renderFileGroup();
-if(FS_OK)idbGet('fh').then(async h=>{if(!h||typeof h.queryPermission!=='function')return;FH=h;try{fhState=await h.queryPermission({mode:'readwrite'});}catch(e){fhState='prompt';}if(fhState!=='granted')showResume(true);renderFileGroup();});
 if(!storeOk)toast("This browser isn't saving changes. Use Export → Download backup before closing.",9000);
 })();
 </script>
