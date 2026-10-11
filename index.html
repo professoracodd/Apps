@@ -146,6 +146,7 @@ main{padding:calc(56px + env(safe-area-inset-top,0px) + 4px) 0 calc(96px + env(s
 .panel .fld>.caps{opacity:.8}
 .panel-g{display:grid;grid-template-columns:1.15fr .85fr 1fr;gap:8px}
 .panel.use .panel-g{grid-template-columns:repeat(2,minmax(0,1fr))}
+.panel.use .panel-g .fld:nth-child(3){grid-column:1/-1}
 .panel input,.panel select{background-color:var(--sc-lowest);padding:8px 10px}
 .panel select{padding-right:26px;background-position:right 8px center}
 .panel.buy input,.panel.buy select{border-color:var(--peach-line)}
@@ -503,7 +504,7 @@ const DENS=[ // ounces per cup (standard baking weights)
   [/flour/,4.25],[/cocoa/,3],[/chocolate|chip/,6],[/butter|margarine/,8],[/shortening/,6.75],
   [/baking soda/,9.6],[/baking powder/,7.68],[/salt/,9.6],[/meringue/,4.8],[/corn ?starch/,4],
   [/oat/,3.2],[/pecan|walnut|almond(?! extract)|nut/,4],[/honey|molasses|syrup/,12],[/sprinkle|nonpareil/,6.4]];
-const VOLC={cup:1,tbsp:1/16,tsp:1/48,floz:1/8,ml:1/236.6,l:1000/236.6},WTOZ={oz:1,lb:16,g:1/28.3495,kg:35.274};
+const VOLC={cup:1,tbsp:1/16,tsp:1/48,pinch:1/768,floz:1/8,ml:1/236.6,l:1000/236.6},WTOZ={oz:1,lb:16,g:1/28.3495,kg:35.274};
 const UFR={'½':' 1/2','¼':' 1/4','¾':' 3/4','⅓':' 1/3','⅔':' 2/3','⅛':' 1/8','⅜':' 3/8','⅝':' 5/8','⅞':' 7/8'};
 function parseMeasure(str){
   let t=String(str||'').toLowerCase().replace(/[½¼¾⅓⅔⅛⅜⅝⅞]/g,c=>UFR[c]).replace(/(\d)-(\d+\/)/g,'$1 $2').trim();
@@ -513,9 +514,9 @@ function parseMeasure(str){
   if(!(q>0))return null;const r=m[2];
   const U=[[/^(fl\.?\s*oz|fluid\s*ounces?)\b/,'floz'],[/^(cups?|c)\b/,'cup'],[/^(tablespoons?|tbsps?|tbls?|tbs)\b/,'tbsp'],[/^(teaspoons?|tsps?)\b/,'tsp'],
     [/^(ounces?|oz)\b/,'oz'],[/^(pounds?|lbs?)\b/,'lb'],[/^(kilograms?|kgs?)\b/,'kg'],[/^(grams?|g)\b/,'g'],[/^(milliliters?|ml)\b/,'ml'],[/^(liters?|l)\b/,'l'],
-    [/^sticks?\b/,'stick'],[/^dozen\b/,'dozen']];
+    [/^sticks?\b/,'stick'],[/^dozen\b/,'dozen'],[/^pinch(es)?\b/,'pinch']];
   for(const[re,u]of U){const mm=r.match(re);if(mm)return{q,u,rest:r.slice(mm[0].length).trim()};}
-  if(/^(pinch|dash|drop|handful)/.test(r))return null;
+  if(/^(dash|drop|handful)/.test(r))return null;
   return{q,u:'each',rest:r.trim()};
 }
 function measureToAmount(measure,name,pkgUnit){
@@ -543,7 +544,7 @@ function kitchenNum(q,frac){
   if(Math.abs(f-best[0])>0.02)return String(Math.round(q*100)/100);
   const W=best[0]===1?w+1:w;return W&&best[1]?`${W} ${best[1]}`:best[1]||String(W);
 }
-const UWORD={cup:['cup','cups'],tbsp:['tbsp','tbsp'],tsp:['tsp','tsp'],floz:['fl oz','fl oz'],ml:['ml','ml'],l:['liter','liters'],oz:['oz','oz'],lb:['lb','lb'],g:['g','g'],kg:['kg','kg'],stick:['stick','sticks'],dozen:['dozen','dozen']};
+const UWORD={pinch:['pinch','pinches'],each:['each','each'],cup:['cup','cups'],tbsp:['tbsp','tbsp'],tsp:['tsp','tsp'],floz:['fl oz','fl oz'],ml:['ml','ml'],l:['liter','liters'],oz:['oz','oz'],lb:['lb','lb'],g:['g','g'],kg:['kg','kg'],stick:['stick','sticks'],dozen:['dozen','dozen']};
 function amountToMeasure(it){
   const pm=parseMeasure(it.measure),amt=num(it.amount);if(!pm||!(amt>0))return null;
   const one=measureToAmount(`1 ${pm.u==='each'?pm.rest||'':(UWORD[pm.u]||[pm.u])[0]}`,it.name,it.unit);if(one.v==null||!(one.v>0))return null;
@@ -555,6 +556,16 @@ function autoMeasure(si,ii){
   const it=R().sections[si].items[ii];const m=amountToMeasure(it);if(!m||m===it.measure)return;
   it.measure=m;const el=document.querySelector(`[data-b="i:${si}:${ii}:measure"]`);if(el&&document.activeElement!==el)el.value=m;
 }
+const MU=[['cup','cup'],['tbsp','tbsp'],['tsp','tsp'],['pinch','pinch'],['floz','fl oz'],['ml','ml'],['l','liter'],['oz','oz (weight)'],['lb','lb'],['g','g'],['kg','kg'],['stick','stick (butter)'],['each','each'],['dozen','dozen']];
+const FRAC_U=['cup','tbsp','tsp','pinch','stick','dozen','each'];
+function muOpts(sel){return MU.map(([k,l])=>`<option value="${k}"${k===sel?' selected':''}>${l}</option>`).join('');}
+function parseQty(str){const t=String(str??'').replace(/[½¼¾⅓⅔⅛⅜⅝⅞]/g,c=>UFR[c]).trim();const m=t.match(/^(\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?|\.\d+)$/);if(!m)return null;
+  const q=m[1].split(/\s+/).reduce((a,x)=>{if(x.includes('/')){const[n,d]=x.split('/');return a+(+d?+n/+d:0);}return a+ +x;},0);return q>0?q:null;}
+function buildMeasure(it){const q=parseQty(it.mq);if(q==null)return '';const w=it.mu==='each'?(it.mx?'':'each'):(UWORD[it.mu]||[it.mu,it.mu])[q>1+1e-9?1:0];return [String(it.mq).trim(),w,it.mx||''].filter(Boolean).join(' ');}
+function syncFromMeasure(it){const pm=parseMeasure(it.measure);
+  if(!pm){if(it.mq===undefined){it.mq='';it.mu='cup';it.mx='';}return;}
+  it.mq=kitchenNum(pm.q,FRAC_U.includes(pm.u));it.mu=pm.u;const rest=(pm.rest||'').trim();it.mx=pm.u==='each'&&rest==='each'?'':rest;}
+function ensureMQ(it){if(it.mq===undefined)syncFromMeasure(it);}
 function autoAmount(si,ii){
   const it=R().sections[si].items[ii];const res=measureToAmount(it.measure,it.name,it.unit);if(res.v==null)return;
   it.amount=res.v;const el=document.querySelector(`[data-b="i:${si}:${ii}:amount"]`);if(el&&document.activeElement!==el)el.value=nfmt(res.v);
@@ -715,7 +726,7 @@ function profitHTML(){
   <section class="card"><div class="card-h"><h2 class="title">Where the Money Goes</h2></div><div class="bars" data-html="bars"></div></section>`;
 }
 function recipeHTML(){
-  const r=R();let ing='';
+  const r=R();let ing='';r.sections.forEach(s=>s.items.forEach(ensureMQ));
   r.sections.forEach((s,si)=>{
     ing+=`<div class="sec-h"><input class="sec-in" data-b="s:${si}:name" value="${val(s.name)}" aria-label="Section name"><button class="link" data-a="addItem:${si}">${ms('add','xs')}Add</button><button class="icon-sm" data-a="delSec:${si}" aria-label="Remove section">${ms('delete','sm')}</button></div><div class="rows">`;
     s.items.forEach((it,ii)=>{const k=`${si}-${ii}`,key=`i:${si}:${ii}`,open=OPEN===key,p=`i:${si}:${ii}:`;
@@ -728,8 +739,9 @@ function recipeHTML(){
           <label class="fld"><span class="caps">Unit</span><select data-b="${p}unit">${unitOpts(it.unit)}</select></label>
         </div></div>
         <div class="panel use wide"><div class="panel-h">${ms('scale','xs')}In your recipe</div><div class="panel-g">
-          <label class="fld"><span class="caps">Measure</span><input data-b="${p}measure" value="${val(it.measure)}" placeholder="e.g. 1 cup"></label>
-          <label class="fld"><span class="caps">Amount / batch</span><span class="suf">${numIn(p+'amount',it.amount)}<i data-o="b-${k}"></i></span></label>
+          <label class="fld"><span class="caps">Amount</span><input type="text" inputmode="decimal" autocomplete="off" data-b="${p}mq" value="${val(it.mq)}" placeholder="1"></label>
+          <label class="fld"><span class="caps">Unit</span><select data-b="${p}mu">${muOpts(it.mu)}</select></label>
+          <label class="fld"><span class="caps">Uses from package</span><span class="suf">${numIn(p+'amount',it.amount)}<i data-o="b-${k}"></i></span></label>
         </div><span class="foot auto-hint" data-o="am-${k}"></span></div>
         <div class="ed-foot wide"><span></span><button class="link danger" data-a="delItem:${si}:${ii}">${ms('delete','xs')}Remove</button></div>
       </div>`:''}</div>`;});
@@ -848,7 +860,7 @@ function update(){
         o['cc-'+k]=cents(z.cc);o['b-'+k]=unitLabel(num(it.amount),z.base,it.name);
         o['cpu-'+k]=`${cents(z.cpu)} per ${z.base} · ${money(z.cb)} per batch`;
         if(OPEN===`i:${z.si}:${z.ii}`){const m=measureToAmount(it.measure,it.name,it.unit);
-          const ml=measureLine(it);o['am-'+k]=!ml?['Type a measure and the amount fills in',false]:m.v!=null?[`✓ ${ml.m} = ${nfmt(m.v)} ${unitLabel(m.v,m.base,it.name)}`,false]:m.why==='dens'?['No cup weight for this one. Type the amount.',true]:['Type the amount',true];}});
+          const ml=measureLine(it);o['am-'+k]=!ml?['Type an amount and pick a unit',false]:m.v!=null?[`✓ ${ml.m} = ${nfmt(m.v)} ${unitLabel(m.v,m.base,it.name)}`,false]:m.why==='dens'?['No cup weight for this one. Type the amount.',true]:['Type the amount',true];}});
       o['t-batch']=money(c.batch);o['t-cookie']=cents(c.perCookie);
     }else if(S.tab==='orders'){
       const p=c.plan,dz=num(r.planDozens);
@@ -872,7 +884,11 @@ function setBound(el){
   switch(parts[0]){
     case 'r':r[parts[1]]=v;break;
     case 's':r.sections[+parts[1]].name=v;break;
-    case 'i':r.sections[+parts[1]].items[+parts[2]][parts[3]]=v;if(parts[3]==='measure'||parts[3]==='unit')autoAmount(+parts[1],+parts[2]);else if(parts[3]==='amount')autoMeasure(+parts[1],+parts[2]);break;
+    case 'i':{const si=+parts[1],ii=+parts[2],f=parts[3],it=r.sections[si].items[ii];it[f]=v;
+      if(f==='mq'||f==='mu'){ensureMQ(it);it.measure=buildMeasure(it);autoAmount(si,ii);}
+      else if(f==='unit')autoAmount(si,ii);
+      else if(f==='amount'){ensureMQ(it);autoMeasure(si,ii);const mx=it.mx,mu=it.mu;syncFromMeasure(it);if(!it.mx)it.mx=mx;it.mu=mu;it.measure=buildMeasure(it);const el=document.querySelector(`[data-b="i:${si}:${ii}:mq"]`);if(el&&document.activeElement!==el)el.value=it.mq;}
+      break;}
     case 'p':S.packaging.items[+parts[1]][parts[2]]=v;break;
     case 'l':S.packaging.label[parts[1]]=v;break;
   }
@@ -919,8 +935,8 @@ const TOUR=[
   {tab:'profit',sel:'.time-card',t:'Time per batch',d:'Slide to match how long a batch takes you. Your hourly pay updates as you go.',dur:9000,
     demo:async tok=>{const v=+q('[data-s=min]').value;await drag('[data-s=min]',v+25,tok);await sleep(900,tok);await drag('[data-s=min]',v,tok);}},
   {tab:'profit',sel:'.tiles',t:'Your costs',d:'What the order costs you, and what each cookie costs with its box.',dur:7000},
-  {tab:'recipe',sel:'[data-tour=ingredients] .item',t:'Your ingredients',d:'Tap an ingredient and type a measure like "1 cup". The amount fills itself in, and cost per cookie updates instantly.',dur:12000,
-    demo:async tok=>{await tapClick('[data-a="exp:i:0:0"]',tok);await sleep(500,tok);await typeInto('[data-b="i:0:0:measure"]','1 1/2 cups',tok);await sleep(1200,tok);const p=q('[data-b="i:0:0:price"]');const old=p?String(p.value):'';await typeInto('[data-b="i:0:0:price"]',(Math.round((num(old)*1.3)*100)/100).toFixed(2),tok);}},
+  {tab:'recipe',sel:'[data-tour=ingredients] .item',t:'Your ingredients',d:'Tap an ingredient, type an amount and pick a unit like cups or tbsp. What it uses from the package fills itself in, and cost per cookie updates instantly.',dur:12000,
+    demo:async tok=>{await tapClick('[data-a="exp:i:0:0"]',tok);await sleep(500,tok);await typeInto('[data-b="i:0:0:mq"]','1.5',tok);await sleep(700,tok);{const el=q('[data-b="i:0:0:mu"]');await fingerTo(el,tok);await tap(tok);el.classList.add('demo-focus');await sleep(500,tok);el.value='tbsp';SFX.tap();setBound(el);await sleep(900,tok);el.value='cup';SFX.tap();setBound(el);await sleep(600,tok);el.classList.remove('demo-focus');}await sleep(600,tok);const p=q('[data-b="i:0:0:price"]');const old=p?String(p.value):'';await typeInto('[data-b="i:0:0:price"]',(Math.round((num(old)*1.3)*100)/100).toFixed(2),tok);}},
   {tab:'pack',sel:'[data-tour=packaging] .rows',t:'Packaging',d:'Boxes, wax paper, labels, and ink. Shared by every recipe and added to each order.',dur:9500,
     demo:async tok=>{await tapClick('[data-a="exp:p:0"]',tok);await sleep(500,tok);await typeInto('[data-b="p:0:price"]','35',tok);}},
   {tab:'orders',sel:'[data-tour=orderhero]',t:'Plan an order',d:'Set how many dozens someone ordered to see batches, bake time, and profit, plus a shopping list you can check off.',dur:9000,
@@ -1109,7 +1125,7 @@ function drawRecipe(doc,r,inc){
   r.sections.forEach(s=>{
     body.push([{content:pdfText(s.name),colSpan:cols,styles:{fillColor:soft,fontStyle:'bold',textColor:brown}}]);
     s.items.forEach(it=>{const x=c.rows[ri++];if(!it.name&&blank(it.amount))return;
-      const row=[pdfText(it.name),pdfText(it.measure),blank(it.amount)?'':`${nfmt(it.amount)} ${pdfText(x.base)}`];
+      const row=[pdfText(it.name),pdfText(it.measure),blank(it.amount)?'':`${nfmt(it.amount)} ${pdfText(unitLabel(num(it.amount),x.base,it.name))}`];
       if(inc)row.push(money(x.cb),money3(x.cc));body.push(row);});
   });
   if(inc)body.push([{content:'Total ingredients',colSpan:3,styles:{fontStyle:'bold'}},{content:money(c.batch),styles:{fontStyle:'bold'}},{content:money3(c.perCookie),styles:{fontStyle:'bold'}}]);
@@ -1135,7 +1151,7 @@ function drawRecipe(doc,r,inc){
 }
 function printFallback(list,inc){
   const h=list.map(r=>{const c=calc(r);let ri=0;
-    let rows='';r.sections.forEach(s=>{rows+=`<tr><td class="sec" colspan="${inc?5:3}">${esc(s.name)}</td></tr>`;s.items.forEach(it=>{const x=c.rows[ri++];if(!it.name&&blank(it.amount))return;rows+=`<tr><td>${esc(it.name)}</td><td>${esc(it.measure)}</td><td>${blank(it.amount)?'':nfmt(it.amount)+' '+esc(x.base)}</td>${inc?`<td>${money(x.cb)}</td><td>${money3(x.cc)}</td>`:''}</tr>`;});});
+    let rows='';r.sections.forEach(s=>{rows+=`<tr><td class="sec" colspan="${inc?5:3}">${esc(s.name)}</td></tr>`;s.items.forEach(it=>{const x=c.rows[ri++];if(!it.name&&blank(it.amount))return;rows+=`<tr><td>${esc(it.name)}</td><td>${esc(it.measure)}</td><td>${blank(it.amount)?'':nfmt(it.amount)+' '+esc(unitLabel(num(it.amount),x.base,it.name))}</td>${inc?`<td>${money(x.cb)}</td><td>${money3(x.cc)}</td>`:''}</tr>`;});});
     const pr=inc?`<h3>Pricing &amp; profit</h3><table><tr><th>Order</th><th>Price</th><th>Ingredients</th><th>Packaging</th><th>Total cost</th><th>Profit</th><th>Margin</th></tr>${c.orders.map(o=>`<tr><td>${o.label}</td><td>${money(o.used)}</td><td>${money(o.ing)}</td><td>${money(o.pkg)}</td><td>${money(o.total)}</td><td><b>${money(o.profit)}</b></td><td>${pct(o.margin)}</td></tr>`).join('')}</table>`:'';
     return `<div class="pg"><h1>${esc(r.name)}</h1><div class="meta">Makes ${num(r.yield)} cookies per batch · About ${num(r.minutes)} minutes per batch</div><table><tr><th>Ingredient</th><th>Measure</th><th>Amount / batch</th>${inc?'<th>Cost / batch</th><th>Cost / cookie</th>':''}</tr>${rows}</table>${pr}${(r.notes||'').trim()?`<h3>Method &amp; notes</h3><div class="notes">${esc(r.notes)}</div>`:''}</div>`;}).join('');
   $('#printArea').innerHTML=h;toast('Choose "Save as PDF" in the print dialog');setTimeout(()=>window.print(),300);
@@ -1244,6 +1260,7 @@ delete S.view;
 if(!S.v5){S.recipes.forEach(x=>x.sections.forEach(sec=>sec.items.forEach(it=>{it.measure=stripEquiv(it.measure);})));S.v5=true;}
 if(!S.v4){S.recipes.forEach(x=>{if(/chocolate chip/i.test(x.name||'')&&num(x.yield)===30)x.yield=12;if(/sugar/i.test(x.name||'')&&num(x.minutes)===100)x.minutes=90;});S.v4=true;}
 if(!S.v3){S.recipes.forEach(x=>{if(/chocolate chip/i.test(x.name||'')&&num(x.minutes)===41)x.minutes=40;});S.v3=true;}
+S.recipes.forEach(x=>x.sections.forEach(sec=>sec.items.forEach(ensureMQ)));
 save();
 render();
 let storeOk=true;try{localStorage.setItem('__batch_t','1');storeOk=localStorage.getItem('__batch_t')==='1';localStorage.removeItem('__batch_t');}catch(e){storeOk=false;}
